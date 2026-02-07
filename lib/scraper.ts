@@ -1,52 +1,54 @@
-import { chromium, type Browser } from "playwright";
+import chromium from "@sparticuz/chromium";
+import puppeteer from "puppeteer-core";
 import type { ScrapeResult } from "./types";
 
 export async function scrapeUrl(url: string): Promise<ScrapeResult> {
-  let browser: Browser | null = null;
+  console.log("[scraper] Launching browser...");
+  const startTime = Date.now();
+
+  const browser = await puppeteer.launch({
+    args: chromium.args,
+    defaultViewport: { width: 1280, height: 800 },
+    executablePath: await chromium.executablePath(),
+    headless: true,
+  });
+
+  console.log(`[scraper] Browser launched in ${Date.now() - startTime}ms`);
 
   try {
-    browser = await chromium.launch({ headless: true });
-    const context = await browser.newContext({
-      viewport: { width: 1280, height: 800 },
-    });
-    const page = await context.newPage();
+    const page = await browser.newPage();
 
+    console.log(`[scraper] Navigating to ${url}...`);
     await page.goto(url, {
-      waitUntil: "networkidle",
+      waitUntil: "networkidle2",
       timeout: 30000,
     });
+    console.log(`[scraper] Page loaded in ${Date.now() - startTime}ms`);
 
     // Take screenshot
     const screenshotBuffer = await page.screenshot({
       type: "png",
       fullPage: false,
     });
-    const screenshot = screenshotBuffer.toString("base64");
+    const screenshot = Buffer.from(screenshotBuffer).toString("base64");
+    console.log(`[scraper] Screenshot taken: ${screenshot.length} chars base64`);
 
     // Get page title
     const title = await page.title();
 
     // Extract cleaned HTML
     const html = await page.evaluate(() => {
-      // Clone the document
       const clone = document.documentElement.cloneNode(true) as HTMLElement;
-
-      // Remove scripts
       clone.querySelectorAll("script").forEach((el) => el.remove());
-      // Remove style tags (keep inline styles)
       clone.querySelectorAll("style").forEach((el) => el.remove());
-      // Remove SVGs to save space
       clone.querySelectorAll("svg").forEach((el) => el.remove());
-      // Remove noscript
       clone.querySelectorAll("noscript").forEach((el) => el.remove());
-      // Remove iframes
       clone.querySelectorAll("iframe").forEach((el) => el.remove());
-
       return clone.outerHTML;
     });
 
-    // Cap HTML at 50K chars
     const cleanedHtml = html.slice(0, 50000);
+    console.log(`[scraper] Done in ${Date.now() - startTime}ms — title: "${title}", html: ${cleanedHtml.length} chars`);
 
     return {
       screenshot,
@@ -55,8 +57,6 @@ export async function scrapeUrl(url: string): Promise<ScrapeResult> {
       title,
     };
   } finally {
-    if (browser) {
-      await browser.close();
-    }
+    await browser.close();
   }
 }
