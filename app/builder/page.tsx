@@ -35,6 +35,8 @@ export default function BuilderPage() {
   const [instruction, setInstruction] = useState("");
   const [iterationCount, setIterationCount] = useState(0);
   const [error, setError] = useState("");
+  const [showDeployDialog, setShowDeployDialog] = useState(false);
+  const [copied, setCopied] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const accumulatedRef = useRef("");
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -234,6 +236,26 @@ export default function BuilderPage() {
     }
   }
 
+  function buildDeployPrompt(): string {
+    if (!builderData) return "";
+    return `I want to rebuild the frontend of ${builderData.url} ("${builderData.title}").
+
+Here is what I want:
+${builderData.prompt}
+
+Below is the complete target HTML prototype that shows exactly what it should look like. Implement this as a production-quality page in my project, matching the layout, styling, colors, typography, and content as closely as possible. Use Tailwind CSS for styling.
+
+\`\`\`html
+${generatedHtml}
+\`\`\``;
+  }
+
+  function handleCopyPrompt() {
+    navigator.clipboard.writeText(buildDeployPrompt());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   if (!builderData) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -271,6 +293,13 @@ export default function BuilderPage() {
             {iterationCount} iteration{iterationCount !== 1 ? "s" : ""}
           </span>
         )}
+        <button
+          onClick={() => setShowDeployDialog(true)}
+          disabled={!generatedHtml || isGenerating}
+          className="btn-primary rounded-lg px-4 py-2 text-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none shrink-0"
+        >
+          <span>Deploy</span>
+        </button>
       </header>
 
       {/* Main preview area */}
@@ -344,6 +373,69 @@ export default function BuilderPage() {
           </button>
         </div>
       </div>
+
+      {/* Deploy dialog */}
+      <AnimatePresence>
+        {showDeployDialog && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-6"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setShowDeployDialog(false);
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-card border border-border rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl"
+            >
+              {/* Dialog header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+                <div>
+                  <h2 className="font-[family-name:var(--font-syne)] font-bold text-lg text-foreground">
+                    Deploy with AI
+                  </h2>
+                  <p className="text-sm text-muted mt-0.5">
+                    Copy this prompt into Claude Code, Codex, or Gemini CLI
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowDeployDialog(false)}
+                  className="text-muted hover:text-foreground transition-colors p-1"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Prompt preview */}
+              <div className="flex-1 overflow-y-auto p-6">
+                <pre className="text-sm text-foreground/80 whitespace-pre-wrap break-words font-mono bg-background border border-border rounded-xl p-4 max-h-[50vh] overflow-y-auto">
+                  {buildDeployPrompt()}
+                </pre>
+              </div>
+
+              {/* Dialog footer */}
+              <div className="px-6 py-4 border-t border-border flex items-center justify-between">
+                <p className="text-xs text-muted">
+                  {generatedHtml.length.toLocaleString()} chars of HTML included
+                </p>
+                <button
+                  onClick={handleCopyPrompt}
+                  className="btn-primary rounded-xl px-6 py-2.5 text-sm"
+                >
+                  <span>{copied ? "Copied!" : "Copy Prompt"}</span>
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
